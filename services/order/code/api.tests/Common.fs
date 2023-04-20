@@ -6,9 +6,11 @@ open System
 
 [<RequireQualifiedAccess>]
 module Factory =
-    let create configureServices =
+    let createWithoutServices () =
+        new WebApplicationFactory<api.Program>()
+
+    let createWithServices configureServices =
         { new WebApplicationFactory<api.Program>() with
             override _.ConfigureWebHost builder =
-                Action<IServiceCollection> configureServices
-                |> builder.ConfigureServices
-                |> ignore }
+                let configureServicesAction = Action<IServiceCollection>(configureServices)
+                builder.ConfigureServices(configureServicesAction) |> ignore }

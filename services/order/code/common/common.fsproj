@@ -8,8 +8,14 @@
 	<ItemGroup>
 		<Compile Include="Common.fs" />
 		<Compile Include="Model.fs" />
+		<Compile Include="Http.fs" />
+		<Compile Include="Json.fs" />
 	</ItemGroup>
 	<ItemGroup>
 		<PackageReference Include="FSharpPlus" Version="1.4.1" />
+		<PackageReference Include="FSharp.SystemTextJson" Version="1.1.23" />
+	</ItemGroup>
+	<ItemGroup>
+	  <PackageReference Update="FSharp.Core" Version="7.0.300-beta.23176.1" />
 	</ItemGroup>
 </Project>

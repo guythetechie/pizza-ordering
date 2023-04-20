@@ -1,28 +1,38 @@
 ﻿namespace api
 
+open common
 open FSharpPlus
 open Microsoft.AspNetCore.Builder
 open Microsoft.Extensions.DependencyInjection
 open System.Text.Json
-open System.Text.Json.Serialization
 
 [<RequireQualifiedAccess>]
 module private Services =
-    let private configureSerialization (services: IServiceCollection) =
-        let serializerOptions = JsonFSharpOptions.Default().ToJsonSerializerOptions()
+    let private configureVersioning (services: IServiceCollection) =
+        services
+            .AddEndpointsApiExplorer()
+            .AddApiVersioning(fun options -> options.ReportApiVersions <- true)
+            .AddApiExplorer(fun options ->
+                options.GroupNameFormat <- "'v'VVV"
+                options.SubstituteApiVersionInUrl <- true)
+            .EnableApiVersionBinding()
+        |> ignore
 
+        services
+
+    let private configureSerialization (services: IServiceCollection) =
         services.ConfigureHttpJsonOptions(fun options ->
             options.SerializerOptions.PropertyNamingPolicy <- JsonNamingPolicy.CamelCase
             options.SerializerOptions.PropertyNameCaseInsensitive <- true
 
-            serializerOptions.Converters
+            Json.serializerOptions.Converters
             |> Seq.iter options.SerializerOptions.Converters.Add)
 
     let configure services =
         services
+        |> configureVersioning
         |> configureSerialization
-        |> OpenApi.Services.configure
-        |> api.Order.Create.Services.configure
+        |> Order.Create.Services.configure
 
 [<RequireQualifiedAccess>]
 module private WebApplicationBuilder =
@@ -31,13 +41,15 @@ module private WebApplicationBuilder =
         Services.configure builder.Services
         builder
 
-
 [<RequireQualifiedAccess>]
 module private WebApplication =
+    let private configure (application: WebApplication) =
+        let versionedBuilder = application.NewVersionedApi()
+        Order.configureEndpoints versionedBuilder |> ignore
+        application
+
     let create () =
-        WebApplicationBuilder.create ()
-        |> fun builder -> builder.Build()
-        |> tap OpenApi.WebApplication.configure
+        WebApplicationBuilder.create () |> (fun builder -> builder.Build()) |> configure
 
 type Program() =
     class

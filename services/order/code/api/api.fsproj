@@ -8,18 +8,17 @@
 	<ItemGroup>
 		<Compile Include="Http.fs" />
 		<Compile Include="Order.fs" />
-		<Compile Include="OpenApi.fs" />
 		<Compile Include="Program.fs" />
 	</ItemGroup>
 	<ItemGroup>
 		<PackageReference Include="Asp.Versioning.Http" Version="7.0.0" />
 		<PackageReference Include="Asp.Versioning.Mvc.ApiExplorer" Version="7.0.0" />
-		<PackageReference Include="FSharp.SystemTextJson" Version="1.1.23" />
-		<PackageReference Include="Microsoft.ApplicationInsights.AspNetCore" Version="2.22.0-beta2" />
-		<PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="7.0.4" />
-		<PackageReference Include="Swashbuckle.AspNetCore" Version="6.5.0" />
+		<PackageReference Include="Microsoft.ApplicationInsights.AspNetCore" Version="2.22.0-beta3" />
 	</ItemGroup>
 	<ItemGroup>
 		<ProjectReference Include="..\common\common.fsproj" />
+	</ItemGroup>
+	<ItemGroup>
+	  <PackageReference Update="FSharp.Core" Version="7.0.300-beta.23176.1" />
 	</ItemGroup>
 </Project>

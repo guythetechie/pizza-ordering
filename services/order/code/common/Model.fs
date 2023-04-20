@@ -2,23 +2,23 @@
 
 open System
 
-type Topping =
+type ToppingKind =
     | Pepperoni
     | Cheese
     | Pineapple
 
     static member tryFromString value =
         match value with
-        | _ when String.Equals(value, nameof (Topping.Pepperoni)) -> Result.Ok Topping.Pepperoni
-        | _ when String.Equals(value, nameof (Topping.Cheese)) -> Result.Ok Topping.Cheese
-        | _ when String.Equals(value, nameof (Topping.Pineapple)) -> Result.Ok Topping.Pineapple
+        | _ when String.Equals(value, nameof (ToppingKind.Pepperoni)) -> Result.Ok ToppingKind.Pepperoni
+        | _ when String.Equals(value, nameof (ToppingKind.Cheese)) -> Result.Ok ToppingKind.Cheese
+        | _ when String.Equals(value, nameof (ToppingKind.Pineapple)) -> Result.Ok ToppingKind.Pineapple
         | _ -> Result.Error $"'{value}' is not a valid topping."
 
     static member toString topping =
         match topping with
-        | Topping.Pepperoni -> "Pepperoni"
-        | Topping.Cheese -> "Cheese"
-        | Topping.Pineapple -> "Pineapple"
+        | ToppingKind.Pepperoni -> "Pepperoni"
+        | ToppingKind.Cheese -> "Cheese"
+        | ToppingKind.Pineapple -> "Pineapple"
 
 type ToppingAmount =
     | Light
@@ -37,6 +37,10 @@ type ToppingAmount =
         | ToppingAmount.Light -> "Light"
         | ToppingAmount.Medium -> "Medium"
         | ToppingAmount.Extra -> "Extra"
+
+type Topping =
+    { Kind: ToppingKind
+      Amount: ToppingAmount }
 
 type PizzaSize =
     | Small
@@ -58,10 +62,23 @@ type PizzaSize =
 
 type Pizza =
     { Size: PizzaSize
-      Toppings: (Topping * ToppingAmount) list }
+      Toppings: Topping list }
 
-type PickupTime = PickupTime of DateTimeOffset
+type PickupTime =
+    | PickupTime of DateTimeOffset
+
+    static member toDateTimeOffset(PickupTime value) = value
+
+type OrderId =
+    | OrderId of Guid
+
+    static member fromString(value: string) = Guid.Parse(value) |> OrderId
+
+    static member toGuid(OrderId guid) = guid
+
+    static member toString orderId = OrderId.toGuid orderId |> string
 
 type Order =
-    { Pizzas: Pizza list
+    { Id: OrderId
+      Pizzas: Pizza list
       PickupTime: PickupTime }
