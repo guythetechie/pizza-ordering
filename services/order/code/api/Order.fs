@@ -16,54 +16,9 @@ open System.Threading
 open System.Text.Json.Nodes
 
 [<RequireQualifiedAccess>]
-module Create =
+module CreateOrReplace =
     let private toValidation (result: Result<_, string>) =
         result |> Result.mapError List.singleton |> Validation.ofResult
-
-    let private tryGetId (request: HttpRequest) =
-        request.RouteValues["id"]
-        |> string
-        |> Guid.TryParse
-        |> function
-            | true, guid -> OrderId guid |> Ok
-            | false, _ ->
-                Error
-                    { ApiErrorWithStatusCode.Error =
-                        { ApiError.Code = ApiErrorCode.InvalidRouteValue
-                          Message = NonEmptyString.fromString "Order ID must be a valid GUID."
-                          Details = List.empty }
-
-                      StatusCode = HttpStatusCode.BadRequest }
-
-    let private tryGetConditionalHeaderAction (request: HttpRequest) =
-        match (request.Headers.TryGetValue("If-Match"), request.Headers.TryGetValue("If-None-Match")) with
-        | (true, _), (true, _) ->
-            Error
-                { ApiErrorWithStatusCode.Error =
-                    { ApiError.Code = ApiErrorCode.InvalidConditionalHeader
-                      Message = NonEmptyString.fromString "Cannot specify both 'If-Match' and 'If-None-Match' headers."
-                      Details = List.empty }
-
-                  StatusCode = HttpStatusCode.BadRequest }
-
-        | (true, eTag), (false, _) -> NonEmptyString.fromString eTag |> ETag |> ConditionalHeaderAction.Update |> Ok
-        | (false, _), (true, ifMatchHeader) when String.Equals(ifMatchHeader, "*") -> Ok ConditionalHeaderAction.Create
-        | (false, _), (true, _) ->
-            Error
-                { ApiErrorWithStatusCode.Error =
-                    { ApiError.Code = ApiErrorCode.InvalidConditionalHeader
-                      Message = NonEmptyString.fromString "'If-None-Match' header must be '*'."
-                      Details = List.empty }
-
-                  StatusCode = HttpStatusCode.BadRequest }
-        | (false, _), (false, _) ->
-            Error
-                { ApiErrorWithStatusCode.Error =
-                    { ApiError.Code = ApiErrorCode.InvalidConditionalHeader
-                      Message = NonEmptyString.fromString "'If-Match' or 'If-None-Match' header must be specified."
-                      Details = List.empty }
-
-                  StatusCode = HttpStatusCode.PreconditionRequired }
 
     let private tryGetRequestBodyAsJsonObject (request: HttpRequest) =
         JsonObject.tryFromStream request.Body
@@ -119,7 +74,7 @@ module Create =
         |> toValidation
         |> Validation.bind (Validation.traverseBiApplyList validatePizza)
 
-    let private tryGetRequestBodyFromJsonObject jsonObject =
+    let private validateBodyJson jsonObject =
         validationCE {
             let! pickupTime = validatePickupTime jsonObject
             and! pizzas = validatePizzas jsonObject
@@ -127,36 +82,13 @@ module Create =
             return (pickupTime, pizzas)
         }
         |> Validation.toResult
-        |> Result.mapError (fun errors ->
-            { ApiErrorWithStatusCode.Error =
-                { ApiError.Code = ApiErrorCode.InvalidJsonBody
-                  Message = NonEmptyString.fromString "Request body is invalid."
-                  Details =
-                    errors
-                    |> List.map (fun error ->
-                        { ApiError.Code = ApiErrorCode.InvalidJsonBody
-                          Message = NonEmptyString.fromString error
-                          Details = List.empty }) }
 
-              StatusCode = HttpStatusCode.BadRequest })
+    let private parametersToResource id body =
+        let (pickupTime, pizzas) = body
 
-    let private tryGetRequestBody request =
-        tryGetRequestBodyAsJsonObject request
-        |> Async.map (Result.bind tryGetRequestBodyFromJsonObject)
-
-    let private tryGetRequestParameters request =
-        asyncResultCE {
-            let! (pickupTime, pizzas) = tryGetRequestBody request
-            and! id = tryGetId request
-            and! headerAction = tryGetConditionalHeaderAction request
-
-            let order =
-                { Order.Id = id
-                  Pizzas = pizzas
-                  PickupTime = pickupTime }
-
-            return (headerAction, order)
-        }
+        { Order.Id = id
+          Pizzas = pizzas
+          PickupTime = pickupTime }
 
     let private serializeOrder (order: Order) =
         let serializePickupTime pickupTime =
@@ -194,68 +126,16 @@ module Create =
         jsonObject.Add("pizzas", serializePizzas order.Pizzas)
         jsonObject
 
-    let private processCreateRequest (requestUri: Uri) createOrder order =
-        async {
-            match! createOrder order with
-            | Ok eTag ->
-                let orderJson = serializeOrder order
-                orderJson.Add("eTag", ETag.toString eTag)
-                return TypedResults.Created(requestUri, orderJson) :> IResult
-            | Error ApiErrorCode.ResourceAlreadyExists ->
-                return
-                    TypedResults.Conflict(
-                        { ApiError.Code = ApiErrorCode.ResourceAlreadyExists
-                          Message =
-                            NonEmptyString.fromString $"An order with ID {OrderId.toString order.Id} already exists."
-                          Details = List.empty }
-                    )
-            | _ -> return (NotImplementedException() |> raise)
-        }
-
-    let private processUpdateRequest updateOrder eTag order =
-        async {
-            match! updateOrder eTag order with
-            | Ok eTag ->
-                let orderJson = serializeOrder order
-                orderJson.Add("eTag", ETag.toString eTag)
-                return TypedResults.Ok(orderJson) :> IResult
-            | Error ApiErrorCode.ResourceNotFound ->
-                return
-                    TypedResults.NotFound(
-                        { ApiError.Code = ApiErrorCode.ResourceNotFound
-                          Message =
-                            NonEmptyString.fromString $"An order with ID {OrderId.toString order.Id} was not found."
-                          Details = List.empty }
-                    )
-            | Error ApiErrorCode.ETagMismatch ->
-                return
-                    TypedResults.Json(
-                        { ApiError.Code = ApiErrorCode.ETagMismatch
-                          Message =
-                            NonEmptyString.fromString
-                                $"The If-Match header eTag doesn't match the resource's. Another process might have updated it. Please get a new ETag and try again."
-                          Details = List.empty },
-                        statusCode = (int) HttpStatusCode.PreconditionFailed
-                    )
-            | _ -> return (NotImplementedException() |> raise)
-        }
-
-    let private processRequest createOrder updateOrder requestUri headerAction order =
-        match headerAction with
-        | ConditionalHeaderAction.Create -> processCreateRequest requestUri createOrder order
-        | ConditionalHeaderAction.Update eTag -> processUpdateRequest updateOrder eTag order
-
     let private handle createOrder updateOrder request cancellationToken =
-        async {
-            match! tryGetRequestParameters request with
-            | Ok(headerAction, order) ->
-                let requestUri =
-                    new Uri($"{request.Scheme}://{request.Host}{request.PathBase}{request.Path}", UriKind.Absolute)
-
-                return! processRequest createOrder updateOrder requestUri headerAction order
-            | Error error -> return ApiErrorWithStatusCode.toIResult error
-        }
-        |> Async.startAsTaskWithCancellation cancellationToken
+        Handlers.CreateOrReplace.handle
+            createOrder
+            updateOrder
+            serializeOrder
+            (fun order -> OrderId.toString order.Id)
+            validateBodyJson
+            parametersToResource
+            request
+            cancellationToken
 
     type CreateOrder = Order -> Async<Result<ETag, ApiErrorCode>>
 
@@ -291,4 +171,4 @@ let configureEndpoints (builder: IVersionedEndpointRouteBuilder) =
     let groupBuilder =
         builder.MapGroup("/v{version:apiVersion}/orders").HasApiVersion(1)
 
-    Create.Endpoints.configure groupBuilder
+    CreateOrReplace.Endpoints.configure groupBuilder

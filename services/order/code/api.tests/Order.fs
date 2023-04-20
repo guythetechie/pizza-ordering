@@ -88,8 +88,8 @@ module CreateOrReplace =
             member this.CreateFactory() =
                 let configureServices (services: IServiceCollection) =
                     services
-                        .AddSingleton<api.Order.Create.CreateOrder>(createOrder)
-                        .AddSingleton<api.Order.Create.UpdateOrder>(updateOrder)
+                        .AddSingleton<api.Order.CreateOrReplace.CreateOrder>(createOrder)
+                        .AddSingleton<api.Order.CreateOrReplace.UpdateOrder>(updateOrder)
                     |> ignore
 
                 Factory.createWithServices configureServices
