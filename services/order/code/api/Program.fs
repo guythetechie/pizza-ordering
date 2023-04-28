@@ -32,7 +32,7 @@ module private Services =
         services
         |> configureVersioning
         |> configureSerialization
-        |> Order.CreateOrReplace.Services.configure
+        |> Order.configureServices
 
 [<RequireQualifiedAccess>]
 module private WebApplicationBuilder =

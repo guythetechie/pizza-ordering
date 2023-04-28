@@ -8,8 +8,8 @@
 	<ItemGroup>
 		<Compile Include="Common.fs" />
 		<Compile Include="Model.fs" />
-		<Compile Include="Http.fs" />
 		<Compile Include="Json.fs" />
+		<Compile Include="Http.fs" />
 	</ItemGroup>
 	<ItemGroup>
 		<PackageReference Include="FSharpPlus" Version="1.4.1" />
