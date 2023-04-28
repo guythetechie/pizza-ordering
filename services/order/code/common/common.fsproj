@@ -12,6 +12,7 @@
 		<Compile Include="Http.fs" />
 	</ItemGroup>
 	<ItemGroup>
+		<PackageReference Include="Flurl" Version="3.0.7" />
 		<PackageReference Include="FSharpPlus" Version="1.4.1" />
 		<PackageReference Include="FSharp.SystemTextJson" Version="1.1.23" />
 	</ItemGroup>
